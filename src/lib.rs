@@ -12,9 +12,36 @@ struct ReaderOptions {
     trim: bool,
 }
 
-impl Default for ReaderOptions {
-    fn default() -> Self {
-        ReaderOptions {
+struct ReaderBuilder {
+    delimiter: char,
+    skip_headers: bool,
+    trim: bool,
+}
+
+impl ReaderBuilder {
+    pub fn delimiter(&mut self, delimiter: char) -> &mut ReaderBuilder {
+        self.delimiter = delimiter;
+        self
+    }
+
+    pub fn skip_headers(&mut self, skip_headers: bool) -> &mut ReaderBuilder {
+        self.skip_headers = skip_headers;
+        self
+    }
+
+    pub fn from<R: io::Read>(&self, read: R) -> Reader<R> {
+        Reader::make(
+            read,
+            ReaderOptions {
+                delimiter: self.delimiter,
+                skip_headers: self.skip_headers,
+                trim: self.trim,
+            },
+        )
+    }
+
+    pub fn new() -> ReaderBuilder {
+        ReaderBuilder {
             delimiter: ',',
             skip_headers: true,
             trim: true,
@@ -24,7 +51,6 @@ impl Default for ReaderOptions {
 
 struct ReaderState {
     headers: Option<Vec<String>>,
-    seeked: bool,
 }
 
 struct Reader<R: io::Read> {
@@ -34,28 +60,22 @@ struct Reader<R: io::Read> {
 }
 
 impl<R: io::Read> Reader<R> {
-    //    pub fn delimiter(&mut self, delimiter: String) -> &mut Reader {
-    //        self.delimiter = delimiter;
-    //        self
-    //    }
-    //
-    //    pub fn skip_headers(&mut self, skip_headers: bool) -> &mut Reader {
-    //        self.skip_headers = skip_headers;
-    //        self
-    //    }
-    //
-    //    pub fn parse(&self, file: File) {
-    //        let reader = BufReader::new(file);
-    //    }
-    //
     pub fn from(read: R) -> Reader<R> {
+        Reader::make(
+            read,
+            ReaderOptions {
+                delimiter: ',',
+                skip_headers: true,
+                trim: true,
+            },
+        )
+    }
+
+    fn make(read: R, options: ReaderOptions) -> Reader<R> {
         Reader {
             reader: BufReader::new(read).lines(),
-            options: ReaderOptions::default(),
-            state: ReaderState {
-                headers: None,
-                seeked: false,
-            },
+            options,
+            state: ReaderState { headers: None },
         }
     }
 
@@ -83,8 +103,7 @@ impl<R: io::Read> Reader<R> {
                     })
                     .collect();
 
-                if !self.state.seeked && self.state.headers.is_none() {
-                    self.state.seeked = true;
+                if self.state.headers.is_none() {
                     self.state.headers = Some(fields.clone());
 
                     if self.options.skip_headers {
@@ -94,7 +113,7 @@ impl<R: io::Read> Reader<R> {
 
                 Some(Ok(fields))
             }
-            Err(_) => None,
+            Err(err) => Some(Err(Box::new(err))),
         }
     }
 }
@@ -126,6 +145,38 @@ mod tests {
 
         assert_eq!(reader.state.headers, None);
 
+        Ok(())
+    }
+
+    #[test]
+    fn reader() -> Result<(), Box<dyn Error>> {
+        let file = File::open("data/1.csv")?;
+        let mut reader = Reader::from(file);
+
+        for result in reader.iter() {
+            let row = result?;
+            assert_eq!(row.len(), 3)
+        }
+
+        assert!(reader.state.headers.is_some());
+        if let Some(headers) = reader.state.headers {
+            assert_eq!(headers[0], "h1");
+            assert_eq!(headers[1], "h2");
+            assert_eq!(headers[2], "h3");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn builder() -> Result<(), Box<dyn Error>> {
+        let file = File::open("data/sep-|.csv")?;
+        let mut reader = ReaderBuilder::new().delimiter('|').from(file);
+
+        for row in reader.iter() {
+            let r = row?;
+            assert_eq!(r.len(), 2);
+        }
         Ok(())
     }
 }
