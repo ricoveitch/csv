@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     fs::File,
-    io::{BufRead, BufReader, Lines},
+    io::{self, BufRead, BufReader, Lines},
 };
 
 struct ReaderOptions {
@@ -20,12 +20,12 @@ impl Default for ReaderOptions {
     }
 }
 
-struct Reader {
-    reader: Lines<BufReader<File>>,
+struct Reader<R: io::Read> {
+    reader: Lines<BufReader<R>>,
     reader_opts: ReaderOptions,
 }
 
-impl Reader {
+impl<R: io::Read> Reader<R> {
     //    pub fn delimiter(&mut self, delimiter: String) -> &mut Reader {
     //        self.delimiter = delimiter;
     //        self
@@ -40,12 +40,8 @@ impl Reader {
     //        let reader = BufReader::new(file);
     //    }
     //
-    //    pub fn rows(&self) {
-    //        // return an iterator
-    //    }
-
-    pub fn from(file: File) -> Reader {
-        let mut reader = BufReader::new(file).lines();
+    pub fn from(read: R) -> Reader<R> {
+        let mut reader = BufReader::new(read).lines();
         reader.next();
 
         Reader {
@@ -55,7 +51,7 @@ impl Reader {
     }
 }
 
-impl Iterator for Reader {
+impl<R: io::Read> Iterator for Reader<R> {
     type Item = Vec<String>;
 
     fn next(&mut self) -> Option<Self::Item> {
