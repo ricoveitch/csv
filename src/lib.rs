@@ -4,6 +4,8 @@ use std::{
     io::{self, BufRead, BufReader, Lines},
 };
 
+type ReaderRowResult = Result<Vec<String>, Box<dyn Error>>;
+
 struct ReaderOptions {
     delimiter: char,
     skip_headers: bool,
@@ -20,9 +22,15 @@ impl Default for ReaderOptions {
     }
 }
 
+struct ReaderState {
+    headers: Option<Vec<String>>,
+    seeked: bool,
+}
+
 struct Reader<R: io::Read> {
     reader: Lines<BufReader<R>>,
-    reader_opts: ReaderOptions,
+    options: ReaderOptions,
+    state: ReaderState,
 }
 
 impl<R: io::Read> Reader<R> {
@@ -41,20 +49,21 @@ impl<R: io::Read> Reader<R> {
     //    }
     //
     pub fn from(read: R) -> Reader<R> {
-        let mut reader = BufReader::new(read).lines();
-        reader.next();
-
         Reader {
-            reader,
-            reader_opts: ReaderOptions::default(),
+            reader: BufReader::new(read).lines(),
+            options: ReaderOptions::default(),
+            state: ReaderState {
+                headers: None,
+                seeked: false,
+            },
         }
     }
-}
 
-impl<R: io::Read> Iterator for Reader<R> {
-    type Item = Vec<String>;
+    pub fn iter(&mut self) -> ReaderIterator<R> {
+        ReaderIterator { reader: self }
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn read_row(&mut self) -> Option<ReaderRowResult> {
         let result = match self.reader.next() {
             Some(r) => r,
             None => return None,
@@ -64,19 +73,41 @@ impl<R: io::Read> Iterator for Reader<R> {
             Ok(row) => {
                 let fields: Vec<String> = row
                     .trim()
-                    .split(self.reader_opts.delimiter)
+                    .split(self.options.delimiter)
                     .map(|s| {
-                        if self.reader_opts.trim {
+                        if self.options.trim {
                             s.trim().to_string()
                         } else {
                             s.to_string()
                         }
                     })
                     .collect();
-                Some(fields)
+
+                if !self.state.seeked && self.state.headers.is_none() {
+                    self.state.seeked = true;
+                    self.state.headers = Some(fields.clone());
+
+                    if self.options.skip_headers {
+                        return self.read_row();
+                    }
+                }
+
+                Some(Ok(fields))
             }
             Err(_) => None,
         }
+    }
+}
+
+struct ReaderIterator<'r, R: io::Read> {
+    reader: &'r mut Reader<R>,
+}
+
+impl<'r, R: io::Read> Iterator for ReaderIterator<'r, R> {
+    type Item = ReaderRowResult;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.reader.read_row()
     }
 }
 
@@ -85,13 +116,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() -> Result<(), Box<dyn Error>> {
-        let file = File::open("data/1.csv")?;
-        let reader = Reader::from(file);
+    fn empty_file() -> Result<(), Box<dyn Error>> {
+        let file = File::open("data/empty.csv")?;
+        let mut reader = Reader::from(file);
 
-        for row in reader {
-            println!("{:?}", row)
+        for _ in reader.iter() {
+            assert_eq!(true, false)
         }
+
+        assert_eq!(reader.state.headers, None);
 
         Ok(())
     }
