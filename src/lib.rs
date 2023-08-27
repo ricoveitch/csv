@@ -4,6 +4,8 @@ use std::{
     io::{self, BufRead, BufReader, Lines},
 };
 
+mod writer;
+
 type ReaderRowResult = Result<Vec<String>, Box<dyn Error>>;
 
 struct ReaderOptions {
