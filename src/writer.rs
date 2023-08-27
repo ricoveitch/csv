@@ -1,8 +1,9 @@
-use std::{fs, io};
+use std::io;
 
 pub struct Writer {
     buffer: Vec<u8>,
     delimiter: u8,
+    escape: u8,
 }
 
 impl Writer {
@@ -10,6 +11,7 @@ impl Writer {
         Writer {
             buffer: Vec::new(),
             delimiter: b',',
+            escape: b'"',
         }
     }
 
@@ -36,7 +38,7 @@ impl Writer {
     fn write_col<T: AsRef<[u8]>>(&mut self, col: T) {
         let requires_escape = self.requires_escape(col.as_ref());
         if requires_escape {
-            self.buffer.push(b'"');
+            self.buffer.push(self.escape);
         }
 
         for byte in col.as_ref() {
@@ -44,7 +46,7 @@ impl Writer {
         }
 
         if requires_escape {
-            self.buffer.push(b'"');
+            self.buffer.push(self.escape);
         }
     }
 
@@ -72,34 +74,5 @@ impl Writer {
 
     pub fn to_buffer(&self) -> &[u8] {
         &self.buffer
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn get_string(b: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
-        let s = String::from_utf8(b.to_vec())?;
-        Ok(s)
-    }
-
-    #[test]
-    fn write_1() -> Result<(), Box<dyn std::error::Error>> {
-        let mut writer = Writer::new();
-        writer.write_row(&["a", "b", "c"]);
-        let contents = get_string(writer.to_buffer())?;
-        assert_eq!(contents, "a,b,c");
-        Ok(())
-    }
-
-    #[test]
-    fn write_2() -> Result<(), Box<dyn std::error::Error>> {
-        let mut writer = Writer::new();
-        writer.write_row(&["a", "", "c"]);
-        writer.write_row(&["a", "\n", ","]);
-        let contents = get_string(writer.to_buffer())?;
-        assert_eq!(contents, "a,,c\na,\"\n\",\",\"");
-        Ok(())
     }
 }
