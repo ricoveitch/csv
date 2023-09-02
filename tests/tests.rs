@@ -52,13 +52,13 @@ mod tests {
         Ok(())
     }
 
-    fn get_string(b: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
+    fn get_string(b: &[u8]) -> Result<String, Box<dyn Error>> {
         let s = String::from_utf8(b.to_vec())?;
         Ok(s)
     }
 
     #[test]
-    fn write_1() -> Result<(), Box<dyn std::error::Error>> {
+    fn write_1() -> Result<(), Box<dyn Error>> {
         let mut writer = Writer::new();
         writer.write_row(&["a", "b", "c"]);
         let contents = get_string(writer.to_buffer())?;
@@ -67,7 +67,7 @@ mod tests {
     }
 
     #[test]
-    fn write_2() -> Result<(), Box<dyn std::error::Error>> {
+    fn write_2() -> Result<(), Box<dyn Error>> {
         let mut writer = Writer::new();
         writer.write_row(&["a", "", "c"]);
         writer.write_row(&["a", "\n", ","]);
